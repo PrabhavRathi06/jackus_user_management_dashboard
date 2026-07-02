@@ -1,6 +1,29 @@
 import React from 'react';
 
-const UserTable = ({ users, onEdit, onDelete, loading }) => {
+const SortIcon = ({ column, sortConfig }) => {
+  if (sortConfig.key !== column) {
+    return (
+      <svg className="sort-icon sort-icon-inactive" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 15l5 5 5-5" />
+        <path d="M7 9l5-5 5 5" />
+      </svg>
+    );
+  }
+  if (sortConfig.direction === 'asc') {
+    return (
+      <svg className="sort-icon sort-icon-active" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 14l5-5 5 5" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="sort-icon sort-icon-active" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 10l5 5 5-5" />
+    </svg>
+  );
+};
+
+const UserTable = ({ users, onEdit, onDelete, loading, sortConfig, onSort }) => {
   if (loading) {
     return (
       <div className="loading-container">
@@ -20,16 +43,32 @@ const UserTable = ({ users, onEdit, onDelete, loading }) => {
     );
   }
 
+  const sortableColumns = [
+    { key: 'id', label: 'ID' },
+    { key: 'firstName', label: 'First Name' },
+    { key: 'lastName', label: 'Last Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'department', label: 'Department' },
+  ];
+
   return (
     <div className="table-wrapper">
       <table className="user-table" id="user-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>First Name</th>
-            <th>Last Name</th>
-            <th>Email</th>
-            <th>Department</th>
+            {sortableColumns.map((col) => (
+              <th
+                key={col.key}
+                className="sortable-header"
+                onClick={() => onSort(col.key)}
+                title={`Sort by ${col.label}`}
+              >
+                <span className="th-content">
+                  {col.label}
+                  <SortIcon column={col.key} sortConfig={sortConfig} />
+                </span>
+              </th>
+            ))}
             <th>Actions</th>
           </tr>
         </thead>

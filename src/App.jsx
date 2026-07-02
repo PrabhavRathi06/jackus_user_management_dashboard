@@ -1,13 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getUsers, addUser, updateUser, deleteUser } from './api';
 import UserTable from './components/UserTable';
 import UserForm from './components/UserForm';
+import SearchBar from './components/SearchBar';
+import FilterPopup from './components/FilterPopup';
+import Pagination from './components/Pagination';
 
 function App() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+
+  // Search, Sort, Filter, Pagination state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
+  const [filters, setFilters] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    department: '',
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Fetch users on mount
   useEffect(() => {
@@ -26,10 +41,88 @@ function App() {
     }
   };
 
+  // --- Derived data: filter → search → sort → paginate ---
+  const processedUsers = useMemo(() => {
+    let result = [...users];
+
+    // 1. Apply filters
+    if (filters.firstName) {
+      result = result.filter((u) =>
+        u.firstName.toLowerCase().includes(filters.firstName.toLowerCase())
+      );
+    }
+    if (filters.lastName) {
+      result = result.filter((u) =>
+        u.lastName.toLowerCase().includes(filters.lastName.toLowerCase())
+      );
+    }
+    if (filters.email) {
+      result = result.filter((u) =>
+        u.email.toLowerCase().includes(filters.email.toLowerCase())
+      );
+    }
+    if (filters.department) {
+      result = result.filter((u) =>
+        u.department.toLowerCase().includes(filters.department.toLowerCase())
+      );
+    }
+
+    // 2. Apply search (across all fields)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (u) =>
+          u.firstName.toLowerCase().includes(query) ||
+          u.lastName.toLowerCase().includes(query) ||
+          u.email.toLowerCase().includes(query) ||
+          u.department.toLowerCase().includes(query) ||
+          String(u.id).includes(query)
+      );
+    }
+
+    // 3. Apply sort
+    result.sort((a, b) => {
+      const aVal = a[sortConfig.key];
+      const bVal = b[sortConfig.key];
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      if (aStr < bStr) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [users, filters, searchQuery, sortConfig]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(processedUsers.length / pageSize));
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return processedUsers.slice(start, start + pageSize);
+  }, [processedUsers, currentPage, pageSize]);
+
+  // Reset to page 1 when filters/search/pageSize change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filters, pageSize]);
+
+  // Handle sort
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  // CRUD handlers
   const handleAddUser = async (userData) => {
     try {
       const newUser = await addUser(userData);
-      // Assign a unique local ID since JSONPlaceholder always returns id: 11
       const maxId = users.reduce((max, u) => Math.max(max, u.id), 0);
       newUser.id = maxId + 1;
       setUsers((prev) => [...prev, newUser]);
@@ -80,6 +173,14 @@ function App() {
     }
   };
 
+  const handleApplyFilters = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({ firstName: '', lastName: '', email: '', department: '' });
+  };
+
   return (
     <div className="app">
       {/* Header */}
@@ -125,16 +226,44 @@ function App() {
           </span>
           <span className="stat-label">Departments</span>
         </div>
+        <div className="stat-card">
+          <span className="stat-number">{processedUsers.length}</span>
+          <span className="stat-label">Showing</span>
+        </div>
+      </div>
+
+      {/* Toolbar: Search + Filter */}
+      <div className="toolbar">
+        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        <FilterPopup
+          filters={filters}
+          onApply={handleApplyFilters}
+          onClear={handleClearFilters}
+        />
       </div>
 
       {/* Main Content */}
       <main className="main-content" id="main-content">
         <UserTable
-          users={users}
+          users={paginatedUsers}
           onEdit={handleEdit}
           onDelete={handleDeleteUser}
           loading={loading}
+          sortConfig={sortConfig}
+          onSort={handleSort}
         />
+
+        {/* Pagination */}
+        {!loading && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={processedUsers.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
+        )}
       </main>
 
       {/* User Form Modal */}
