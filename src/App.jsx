@@ -1,16 +1,18 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { getUsers, addUser, updateUser, deleteUser } from './api';
 import UserTable from './components/UserTable';
 import UserForm from './components/UserForm';
 import SearchBar from './components/SearchBar';
 import FilterPopup from './components/FilterPopup';
 import Pagination from './components/Pagination';
+import Toast from './components/Toast';
 
 function App() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [toasts, setToasts] = useState([]);
 
   // Search, Sort, Filter, Pagination state
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,6 +26,16 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Toast helpers
+  const addToast = useCallback((message, type = 'success') => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
@@ -36,6 +48,7 @@ function App() {
       setUsers(data);
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      addToast('Failed to load users. Please check your connection and try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -119,7 +132,7 @@ function App() {
     }));
   };
 
-  // CRUD handlers
+  // CRUD handlers with error handling & toast notifications
   const handleAddUser = async (userData) => {
     try {
       const newUser = await addUser(userData);
@@ -127,8 +140,10 @@ function App() {
       newUser.id = maxId + 1;
       setUsers((prev) => [...prev, newUser]);
       setShowForm(false);
+      addToast(`User "${userData.firstName} ${userData.lastName}" added successfully!`, 'success');
     } catch (error) {
       console.error('Failed to add user:', error);
+      addToast('Failed to add user. Please try again.', 'error');
     }
   };
 
@@ -140,18 +155,23 @@ function App() {
       );
       setEditingUser(null);
       setShowForm(false);
+      addToast(`User "${userData.firstName} ${userData.lastName}" updated successfully!`, 'success');
     } catch (error) {
       console.error('Failed to update user:', error);
+      addToast('Failed to update user. Please try again.', 'error');
     }
   };
 
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     try {
+      const deletedUser = users.find((u) => u.id === id);
       await deleteUser(id);
       setUsers((prev) => prev.filter((u) => u.id !== id));
+      addToast(`User "${deletedUser?.firstName} ${deletedUser?.lastName}" deleted successfully!`, 'success');
     } catch (error) {
       console.error('Failed to delete user:', error);
+      addToast('Failed to delete user. Please try again.', 'error');
     }
   };
 
@@ -183,6 +203,9 @@ function App() {
 
   return (
     <div className="app">
+      {/* Toast Notifications */}
+      <Toast toasts={toasts} onRemove={removeToast} />
+
       {/* Header */}
       <header className="app-header" id="app-header">
         <div className="header-content">
